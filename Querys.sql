@@ -7,6 +7,9 @@ ICD10: G30.1 -> LOAD (Late Onset AD)
 ICD10: G31.1 -> Senile degeneration of the brain
 ICD10: G30.8 -> Other AD*/
 
+------ PD Codes ----------------
+
+
 ---- Count distinct id of patients with EOAD -----------------
 
 SELECT COUNT (DISTINCT person_id)
@@ -53,4 +56,78 @@ WHERE CD.condition_source_value = 'ICD10: G30.0' AND
        note_title = 'H&P (View-Only)' OR
        note_title = 'H&P' OR */
        note_title = 'order_narative: CONSULT'
+ORDER BY CD.person_id ASC;
+
+---- See existing codes in DB associated with PD -------------
+
+SELECT DISTINCT condition_source_value
+FROM IDEALIST.CDM.CONDITION_OCCURRENCE
+WHERE (condition_source_value LIKE '%ICD10: G20%' OR condition_source_value LIKE '%ICD10: G21%')
+ORDER BY condition_source_value ASC;
+
+-- PD Codes in DB --
+
+ICD10:G20 and ICD10:G21 refere to idiophatic PD and secondary PD respectively (PD caused by other factors. )
+
+/*
+ICD9: 332.0 -> Paralysis agitans (PD)
+ICD9: 332.1 -> Secondary parkinsonism
+ICD10: G20 -> Parkinson's disease. 
+ICD10: G21.0 -> Malignant neuroleptic syndrome
+ICD10: G21.11 -> Neuroleptic induced parkinsonism
+ICD10: G21.19 -> Other drug induced secondary parkinsonism
+ICD10: G21.2 -> Secondary parkinsonism due to other external agents
+ICD10: G21.3 -> Postencephalitic parkinsonism
+ICD10: G21.4 -> Vascular parkinsonism
+ICD10: G21.8 -> Other secondary parkinsonism
+ICD10: G21.9 -> Secondary parkinsonism, unspecified
+*/
+
+----------- Number of patients for each kind of PD --------------
+
+SELECT condition_source_value, COUNT(DISTINCT person_id) AS distinct_person_count
+FROM IDEALIST.CDM.CONDITION_OCCURRENCE
+WHERE condition_source_value IN (
+    SELECT DISTINCT condition_source_value
+    FROM IDEALIST.CDM.CONDITION_OCCURRENCE
+    WHERE (
+        condition_source_value LIKE '%ICD10: G20%'
+        OR condition_source_value LIKE '%ICD10: G21%'
+        OR condition_source_value LIKE '%ICD9: 332%'
+    )
+)
+GROUP BY condition_source_value
+ORDER BY distinct_person_count DESC;
+
+--------------------- New query ---------------------------------------------------
+SELECT CD.person_id,
+       Person.birth_datetime,
+       Person.gender_source_value,
+       Person.race_source_value,
+       Person.ethnicity_source_value,
+       PO.procedure_source_value,
+       DE.drug_source_value,
+       DE.drug_exposure_start_datetime,
+       DE.quantity,
+       DE.sig,
+       DE.route_source_value,
+       DE.dose_source_value,
+       DE.dose_unit_source_value,
+       Note.note_title,
+       Note.note_text
+FROM NOTE AS Note
+JOIN CONDITION_OCCURRENCE AS CD
+ON (Note.person_id = CD.person_id)
+AND CD.condition_source_value = 'ICD10: G20'
+JOIN PERSON as Person
+ON (CD.person_id = Person.person_id)
+JOIN PROCEDURE_OCCURRENCE AS PO
+ON (Note.person_id = PO.person_id)
+JOIN DRUG_EXPOSURE AS DE
+ON (Note.person_id = DE.person_id)
+WHERE Note.note_title = 'order_narative: CONSULT'
+      /*(note_title = 'order_narative: IMAGING' OR
+       note_title = 'order_impression: IMAGING')  OR
+       note_title = 'H&P (View-Only)' OR
+       note_title = 'H&P' OR */
 ORDER BY CD.person_id ASC;

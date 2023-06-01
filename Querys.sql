@@ -7,9 +7,6 @@ ICD10: G30.1 -> LOAD (Late Onset AD)
 ICD10: G31.1 -> Senile degeneration of the brain
 ICD10: G30.8 -> Other AD*/
 
------- PD Codes ----------------
-
-
 ---- Count distinct id of patients with EOAD -----------------
 
 SELECT COUNT (DISTINCT person_id)
@@ -106,7 +103,9 @@ SELECT CD.person_id,
        Person.race_source_value,
        Person.ethnicity_source_value,
        PO.procedure_source_value,
+       CD.condition_concept_id,
        DE.drug_source_value,
+       DE.drug_source_concept_id,
        DE.drug_exposure_start_datetime,
        DE.quantity,
        DE.sig,
@@ -114,6 +113,7 @@ SELECT CD.person_id,
        DE.dose_source_value,
        DE.dose_unit_source_value,
        Note.note_title,
+       Note.note_source_value,
        Note.note_text
 FROM NOTE AS Note
 JOIN CONDITION_OCCURRENCE AS CD
@@ -130,4 +130,79 @@ WHERE Note.note_title = 'order_narative: CONSULT'
        note_title = 'order_impression: IMAGING')  OR
        note_title = 'H&P (View-Only)' OR
        note_title = 'H&P' OR */
-ORDER BY CD.person_id ASC;
+ORDER BY CD.person_id ASC, DE.drug_source_value ASC;
+
+************New version***********************
+
+SELECT CD.person_id,
+       Person.birth_datetime,
+       Person.gender_source_value,
+       Person.race_source_value,
+       Person.ethnicity_source_value,
+       PO.procedure_source_value,
+       CD.condition_concept_id,
+       DE.drug_source_value,
+       DE.drug_source_concept_id,
+       DE.drug_exposure_start_datetime,
+       DE.quantity,
+       DE.sig,
+       DE.route_source_value,
+       DE.dose_source_value,
+       DE.dose_unit_source_value,
+       Note.note_title,
+       Note.note_text
+FROM NOTE AS Note
+JOIN CONDITION_OCCURRENCE AS CD ON CD.person_id = Note.person_id
+JOIN PERSON AS Person ON Person.person_id = CD.person_id
+JOIN PROCEDURE_OCCURRENCE AS PO ON PO.person_id = Note.person_id
+JOIN DRUG_EXPOSURE AS DE ON DE.person_id = Note.person_id
+WHERE Note.note_title = 'order_narative: CONSULT'
+      /*(note_title = 'order_narative: IMAGING' OR
+       note_title = 'order_impression: IMAGING')  OR
+       note_title = 'H&P (View-Only)' OR
+       note_title = 'H&P' OR */
+      AND CD.condition_source_value = 'ICD10: G20'
+ORDER BY CD.person_id ASC, DE.drug_source_value ASC;
+
+---------------- Qs--------------------
+procedure_type_concept_id vs procedure_source_value
+In Athena: procedure_concept_id == Concept ID. 
+procedure_source_value == Concept code. Bur procedure_concept_id is empty in most cases. Both  values map to each other
+
+drug_source_concept_id maps to drug_source_value.
+condition_concept_id (?)
+
+--------------------- Notes -------------------------
+H&P: History and Physical examination
+Impression: Interpretation/Findings
+Narrative: Backstory, Highlights of findings. Sometimes whole impression
+
+------------------- Query used at the end after 12 h --------------------------
+
+SELECT CD.person_id,
+       Person.birth_datetime,
+       Person.gender_source_value,
+       Person.race_source_value,
+       Person.ethnicity_source_value,
+       PO.procedure_source_value,
+       CD.drug_source_value,
+       CD.quantity,
+       CD.sig,
+       CD.route_source_value,
+       CD.dose_source_value,
+       CD.dose_unit_source_value,
+       Note.note_text
+FROM (
+  SELECT person_id, note_title, note_text
+  FROM NOTE
+  WHERE note_title = 'order_narative: CONSULT'
+) AS Note
+JOIN (
+  SELECT CO.person_id, DE.drug_source_value, DE.drug_exposure_start_datetime, DE.quantity, DE.sig, DE.route_source_value, DE.dose_source_value, DE.dose_unit_source_value
+  FROM CONDITION_OCCURRENCE AS CO
+  JOIN DRUG_EXPOSURE AS DE ON DE.person_id = CO.person_id
+  WHERE CO.condition_source_value = 'ICD10: G20'
+) AS CD ON CD.person_id = Note.person_id
+JOIN PERSON AS Person ON Person.person_id = CD.person_id
+JOIN PROCEDURE_OCCURRENCE AS PO ON PO.person_id = Note.person_id
+ORDER BY CD.person_id ASC, CD.drug_source_value ASC;
